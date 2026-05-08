@@ -26,14 +26,63 @@ spec:
         # Single pod, web UI for Kubernetes — recommended replacement for
         # the now-archived kubernetes-dashboard project.
         replicaCount: 1
+        # Run as the headlamp-admin SA (cluster-admin); its token feeds the kubeconfig below.
+        serviceAccount:
+          create: false
+          name: headlamp-admin
+        # Tell Headlamp to load the kubeconfig the initContainer writes at startup.
+        # With this set, the login screen is skipped — Headlamp uses the SA token directly.
+        config:
+          inCluster: false
+          extraArgs:
+            - "-kubeconfig"
+            - "/home/headlamp/.config/Headlamp/kubeconfigs/config"
         service:
           type: NodePort
           port: 80
           nodePort: 30090
-        # No ingress — we hit the NodePort directly via host port 30090
         ingress:
           enabled: false
-        # Lightweight footprint
+        # Build a kubeconfig with the pod's auto-mounted SA token + CA, so Headlamp
+        # boots authenticated. Avoids the "paste your token" antipattern.
+        initContainers:
+          - name: kubeconfig-init
+            image: busybox:1.36
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                set -e
+                TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                CA=$(base64 -w0 < /var/run/secrets/kubernetes.io/serviceaccount/ca.crt 2>/dev/null \
+                     || base64 < /var/run/secrets/kubernetes.io/serviceaccount/ca.crt | tr -d '\n')
+                cat > /kubeconfig/config <<EOF
+                apiVersion: v1
+                kind: Config
+                clusters:
+                  - name: in-cluster
+                    cluster:
+                      server: https://kubernetes.default.svc
+                      certificate-authority-data: ${CA}
+                users:
+                  - name: headlamp-admin
+                    user:
+                      token: ${TOKEN}
+                contexts:
+                  - name: in-cluster
+                    context:
+                      cluster: in-cluster
+                      user: headlamp-admin
+                current-context: in-cluster
+                EOF
+            volumeMounts:
+              - name: kubeconfig
+                mountPath: /kubeconfig
+        volumes:
+          - name: kubeconfig
+            emptyDir: {}
+        volumeMounts:
+          - name: kubeconfig
+            mountPath: /home/headlamp/.config/Headlamp/kubeconfigs
         resources:
           requests: {cpu: 50m, memory: 64Mi}
           limits:   {memory: 256Mi}
