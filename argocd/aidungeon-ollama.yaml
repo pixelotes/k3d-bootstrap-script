@@ -1,0 +1,49 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aidungeon-ollama
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: aidungeon
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://github.com/pixelotes/AIDungeon-Ollama.git
+    targetRevision: HEAD
+    path: helm
+    helm:
+      values: |
+        image:
+          repository: pixelotes/aidungeon-ollama
+          tag: latest
+          pullPolicy: Always
+        ollama:
+          host: http://ollama.ollama.svc.cluster.local:11434
+          model: qwen3:0.6b
+          timeout: 300
+        ingress:
+          enabled: true
+          className: traefik
+          host: aidungeon.localhost
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager

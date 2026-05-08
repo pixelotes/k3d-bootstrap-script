@@ -16,6 +16,8 @@ available_apps=(
   "friendlyhello"
   "ollama"
   "open-webui"
+  "aidungeon-ollama"
+  "aiventure"
 )
 
 usage() {
