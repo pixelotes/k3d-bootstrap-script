@@ -21,6 +21,12 @@ ingress:
   enabled: true
   className: traefik
   host: friendlyhello.localhost
+  tls:
+    # When enabled, cert-manager.io/cluster-issuer annotation triggers a Certificate
+    # resource and the Ingress is served over HTTPS.
+    enabled: false
+    issuer: lab-ca
+    secretName: friendlyhello-tls
 
 redis:
   image: redis:7-alpine
