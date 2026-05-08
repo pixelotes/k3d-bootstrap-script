@@ -1,0 +1,32 @@
+---
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: k3s-lab
+servers: 2
+agents: 2
+image: rancher/k3s:v1.30.5-k3s1
+network: k3d-k3s-lab
+ports:
+  # Traefik HTTP -> host 8080
+  - port: 8080:80
+    nodeFilters: [loadbalancer]
+  # Traefik HTTPS -> host 8443
+  - port: 8443:443
+    nodeFilters: [loadbalancer]
+  # ArgoCD UI via NodePort -> host 30080
+  - port: 30080:30080
+    nodeFilters: [loadbalancer]
+  # Kubernetes-dashboard via NodePort -> host 30090
+  - port: 30090:30090
+    nodeFilters: [loadbalancer]
+options:
+  k3s:
+    extraArgs:
+      # Disable servicelb (we don't need klipper-lb here, k3d brings its own LB)
+      - arg: --disable=servicelb
+        nodeFilters: [server:*]
+      # Keep Traefik (we want it as ingress per RA5_2)
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

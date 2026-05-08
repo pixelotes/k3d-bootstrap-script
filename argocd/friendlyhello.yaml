@@ -1,0 +1,45 @@
+---
+# Created up-front so ArgoCD finds the destination namespace already existing
+# when it syncs the manifests. ArgoCD's CreateNamespace=true is idempotent.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: friendlyhello
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: friendlyhello
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: friendlyhello
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    # Public repo — image (pixelotes/friendlyhello:latest) is on Docker Hub
+    repoURL: https://github.com/pixelotes/k3d-bootstrap-script.git
+    targetRevision: HEAD
+    path: apps/friendlyhello/k8s
+    directory:
+      recurse: false
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager

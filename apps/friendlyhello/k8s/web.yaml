@@ -1,0 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friendlyhello
+  namespace: friendlyhello
+spec:
+  # Mirrors `docker compose up --scale web=5` from the practical
+  replicas: 5
+  selector:
+    matchLabels: {app: friendlyhello}
+  template:
+    metadata:
+      labels: {app: friendlyhello}
+    spec:
+      containers:
+        - name: web
+          # Image built locally and pushed to Docker Hub (see apps/friendlyhello/build.sh)
+          image: pixelotes/friendlyhello:latest
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: friendlyhello-config
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits:   {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: friendlyhello
+  namespace: friendlyhello
+spec:
+  selector: {app: friendlyhello}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: friendlyhello
+  namespace: friendlyhello
+  annotations:
+    # Traefik handles round-robin across the 5 pods automatically via the Service endpoints
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: friendlyhello.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: friendlyhello
+                port:
+                  number: 80

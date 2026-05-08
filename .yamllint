@@ -1,0 +1,9 @@
+---
+# .yamllint configuration file
+extends: default
+
+ignore: |
+  argocd.yaml
+  .github/
+  *.sh
+  *.md

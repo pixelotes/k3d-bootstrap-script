@@ -1,0 +1,89 @@
+---
+# Created up-front so the SA/Secret below can land before ArgoCD finishes syncing.
+# ArgoCD's CreateNamespace=true is idempotent — it won't fight us.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: headlamp
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: headlamp
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/headlamp/
+    chart: headlamp
+    targetRevision: 0.42.0
+    helm:
+      values: |
+        # Single pod, web UI for Kubernetes — recommended replacement for
+        # the now-archived kubernetes-dashboard project.
+        replicaCount: 1
+        service:
+          type: NodePort
+          port: 80
+          nodePort: 30090
+        # No ingress — we hit the NodePort directly via host port 30090
+        ingress:
+          enabled: false
+        # Lightweight footprint
+        resources:
+          requests: {cpu: 50m, memory: 64Mi}
+          limits:   {memory: 256Mi}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  # Helm renders without API-server defaults; ignore fields managed by kube-controller-manager
+  # (probe defaults, dnsPolicy, terminationMessagePath, etc.) so the app reaches Synced.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager
+---
+# Lab-only admin SA + token. DO NOT use in real environments.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp-admin
+  namespace: headlamp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: headlamp-admin
+    namespace: headlamp
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: headlamp-admin-token
+  namespace: headlamp
+  annotations:
+    kubernetes.io/service-account.name: headlamp-admin
+type: kubernetes.io/service-account-token

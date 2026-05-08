@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python build artifacts (apps/friendlyhello/app)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local kubeconfig copies — never commit
+kubeconfig
+*.kubeconfig
+
+# Vault init output (unseal keys + root token!) — generated locally per README
+vault-init.json
+*-vault-init.json
+
+# Helm temp output
+charts/*.tgz
+
+# Generic local-only files
+*.local
+.env
+.env.*

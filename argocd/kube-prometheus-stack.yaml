@@ -1,0 +1,70 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: monitoring
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 65.1.1
+    helm:
+      values: |
+        fullnameOverride: monitoring
+        crds:
+          enabled: true
+        # Light footprint for a 4-node lab cluster
+        prometheus:
+          prometheusSpec:
+            retention: 6h
+            resources:
+              requests: {cpu: 100m, memory: 256Mi}
+              limits:   {memory: 1Gi}
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: local-path
+                  accessModes: [ReadWriteOnce]
+                  resources:
+                    requests:
+                      storage: 5Gi
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests: {cpu: 50m, memory: 64Mi}
+              limits:   {memory: 256Mi}
+        grafana:
+          adminPassword: admin   # lab only
+          service:
+            type: ClusterIP
+          # Expose via Traefik on http://grafana.localhost:8080
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts: [grafana.localhost]
+            path: /
+        # k3s components live in kube-system; the chart's defaults assume kubeadm —
+        # disable scrapers that don't exist on k3s to avoid noisy targets-down alerts.
+        kubeControllerManager: {enabled: false}
+        kubeScheduler:         {enabled: false}
+        kubeProxy:             {enabled: false}
+        kubeEtcd:              {enabled: false}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

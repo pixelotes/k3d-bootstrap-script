@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: friendlyhello-config
+  namespace: friendlyhello
+data:
+  NAME: "K3s Lab"
+  REDIS_HOST: "redis"
