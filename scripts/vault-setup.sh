@@ -30,6 +30,31 @@ vault_in_pod() {
 }
 
 echo "==============================="
+echo "= 0) WAIT FOR VAULT POD       ="
+echo "==============================="
+# ArgoCD applies the Vault Application asynchronously. vault-0 may not exist yet
+# when this script runs (e.g. invoked from start-cluster.sh). Wait up to 5 min.
+WAIT_TIMEOUT=300
+deadline=$(( $(date +%s) + WAIT_TIMEOUT ))
+while ! kubectl get ns "${VAULT_NS}" >/dev/null 2>&1; do
+  (( $(date +%s) > deadline )) && { echo "Timed out waiting for namespace ${VAULT_NS}" >&2; exit 1; }
+  echo "  waiting for namespace ${VAULT_NS}..."
+  sleep 3
+done
+
+while :; do
+  phase=$(kubectl -n "${VAULT_NS}" get pod vault-0 -o jsonpath='{.status.phase}' 2>/dev/null || true)
+  if [[ "${phase}" == "Running" ]]; then
+    echo "  vault-0 is Running"
+    break
+  fi
+  (( $(date +%s) > deadline )) && { echo "Timed out waiting for vault-0 to reach Running (last phase: ${phase:-<missing>})" >&2; exit 1; }
+  echo "  waiting for vault-0 (current phase: ${phase:-<not yet created>})..."
+  sleep 3
+done
+
+echo ""
+echo "==============================="
 echo "= 1) INIT                     ="
 echo "==============================="
 
@@ -136,16 +161,38 @@ vault_in_pod kv put secret/friendlyhello api_token="s3cr3t-from-vault-$(date +%s
 
 echo ""
 echo "==============================="
+echo "= 5) FLIP friendlyhello       ="
+echo "==============================="
+# Patch the ArgoCD Application in-cluster to force vault.enabled=true via
+# spec.source.helm.values. ArgoCD merges this on top of chart/values.yaml.
+# NOTE: this is an in-cluster override. Re-applying argocd/friendlyhello.yaml from
+# this repo overwrites it; edit chart/values.yaml + commit to make it permanent.
+if kubectl -n argocd get application friendlyhello >/dev/null 2>&1; then
+  echo "  Patching ArgoCD Application 'friendlyhello' (vault.enabled=true)..."
+  kubectl -n argocd patch application friendlyhello --type=merge -p \
+    '{"spec":{"source":{"helm":{"values":"vault:\n  enabled: true\n"}}}}' >/dev/null
+  kubectl -n argocd annotate application friendlyhello \
+    argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+  echo "  ArgoCD will re-render the chart and roll new pods with the Vault Agent sidecar."
+else
+  echo "  friendlyhello Application not deployed yet — skipping patch."
+  echo "  Deploy it (./deploy.sh friendlyhello) and re-run this script, or set"
+  echo "  vault.enabled=true in apps/friendlyhello/chart/values.yaml and push."
+fi
+
+echo ""
+echo "==============================="
 echo "= DONE                        ="
 echo "==============================="
 cat <<EOF
 
-Verify:
+Verify the secret is in Vault:
   kubectl -n ${VAULT_NS} exec vault-0 -- env VAULT_TOKEN=${ROOT} vault kv get secret/friendlyhello
 
-Next:
-  1) Set vault.enabled=true in apps/friendlyhello/chart/values.yaml
-  2) git commit + push
-  3) ArgoCD will redeploy friendlyhello with the agent injector annotations
-  4) kubectl -n ${APP_NS} logs deploy/friendlyhello -c web | grep API_TOKEN
+Verify the injection landed in the friendlyhello pods (after ArgoCD re-renders):
+  kubectl -n ${APP_NS} get pods                                    # 2/2 containers per pod
+  kubectl -n ${APP_NS} logs deploy/friendlyhello -c web | grep API_TOKEN
+
+To make the injection persist across argocd/friendlyhello.yaml re-applies:
+  set vault.enabled=true in apps/friendlyhello/chart/values.yaml and push to Git.
 EOF

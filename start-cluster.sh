@@ -14,7 +14,7 @@ apps=(
   "headlamp"
   "cert-manager"
   "kube-prometheus-stack"
-  # "vault"
+  "vault"
   "friendlyhello"
 )
 
@@ -85,6 +85,7 @@ echo "User:     admin"
 echo "Password: ${ARGOCD_PASS}"
 
 # 3) Hand off ArgoCD Application manifests — fire-and-forget, ArgoCD handles ordering & retries
+vault_in_apps=0
 if [[ ${#apps[@]} -gt 0 ]]; then
   echo ""
   echo "==============================="
@@ -98,7 +99,19 @@ if [[ ${#apps[@]} -gt 0 ]]; then
     fi
     echo "  - ${app}"
     kubectl apply -f "${file}" >/dev/null
+    [[ "${app}" == "vault" ]] && vault_in_apps=1
   done
+fi
+
+# 4) If Vault was queued, run the unattended init/unseal/configure script.
+#    vault-setup.sh waits for vault-0 to exist before doing anything, so we don't
+#    need to block here on ArgoCD finishing the rollout.
+if [[ "${vault_in_apps}" -eq 1 ]]; then
+  echo ""
+  echo "==============================="
+  echo "= VAULT SETUP                 ="
+  echo "==============================="
+  "${SCRIPT_DIR}/scripts/vault-setup.sh"
 fi
 
 cat <<EOF

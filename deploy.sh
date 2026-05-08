@@ -14,6 +14,8 @@ available_apps=(
   "vault"
   "headlamp"
   "friendlyhello"
+  "ollama"
+  "open-webui"
 )
 
 usage() {
