@@ -59,7 +59,8 @@ echo "= 1) INIT                     ="
 echo "==============================="
 
 INIT_STATUS=$(kubectl -n "${VAULT_NS}" exec vault-0 -- vault status -format=json 2>/dev/null || true)
-INITIALIZED=$(echo "${INIT_STATUS:-{}}" | jq -r '.initialized // false')
+[[ -z "${INIT_STATUS}" ]] && INIT_STATUS='{}'
+INITIALIZED=$(echo "${INIT_STATUS}" | jq -r '.initialized // false')
 
 if [[ "${INITIALIZED}" == "false" ]]; then
   if [[ -f "${INIT_FILE}" ]]; then
@@ -88,7 +89,8 @@ echo "= 2) UNSEAL                   ="
 echo "==============================="
 
 for pod in vault-0 vault-1 vault-2; do
-  POD_STATUS=$(kubectl -n "${VAULT_NS}" exec "${pod}" -- vault status -format=json 2>/dev/null || echo '{}')
+  POD_STATUS=$(kubectl -n "${VAULT_NS}" exec "${pod}" -- vault status -format=json 2>/dev/null || true)
+  [[ -z "${POD_STATUS}" ]] && POD_STATUS='{}'
   SEALED=$(echo "${POD_STATUS}" | jq -r '.sealed // true')
   if [[ "${SEALED}" == "false" ]]; then
     echo "  ${pod}: already unsealed"
