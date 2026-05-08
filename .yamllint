@@ -3,8 +3,8 @@
 extends: default
 
 ignore: |
-  apps/argocd/argocd.yaml
-  apps/friendlyhello/chart/templates/
+  argocd.yaml
+  templates/
   .github/
   *.sh
   *.md
