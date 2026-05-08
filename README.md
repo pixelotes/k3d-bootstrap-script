@@ -51,7 +51,7 @@ brew install vault etcd stern
     │   └── argocd.yaml     Vendored upstream install manifest
     └── friendlyhello/
         ├── app/            Flask app + Dockerfile + requirements.txt
-        └── k8s/            Namespace + ConfigMap + Redis + Deployment(replicas=5) + Service + Ingress
+        └── chart/          Minimal Helm chart (ConfigMap + Redis + Deployment + Service + Ingress)
 ```
 
 ## How to run, step by step
@@ -152,7 +152,7 @@ docker push pixelotes/friendlyhello:latest
 ./deploy.sh friendlyhello
 ```
 
-ArgoCD pulls `apps/friendlyhello/k8s/` from this repo, kubelet pulls the image from Docker Hub, and the rollout starts. Then:
+ArgoCD renders `apps/friendlyhello/chart` from this repo as Helm, kubelet pulls the image from Docker Hub, and the rollout starts. Then:
 
 ```bash
 # Hits Traefik on host port 8080, routed by the Ingress 'friendlyhello.localhost'

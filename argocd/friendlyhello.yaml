@@ -21,9 +21,11 @@ spec:
     # Public repo — image (pixelotes/friendlyhello:latest) is on Docker Hub
     repoURL: https://github.com/pixelotes/k3d-bootstrap-script.git
     targetRevision: HEAD
-    path: apps/friendlyhello/k8s
-    directory:
-      recurse: false
+    path: apps/friendlyhello/chart
+    helm:
+      # Override values from chart/values.yaml here if needed.
+      # values: |
+      #   replicaCount: 3
   syncPolicy:
     automated:
       prune: true

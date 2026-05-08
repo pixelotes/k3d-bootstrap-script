@@ -3,10 +3,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: friendlyhello
-  namespace: friendlyhello
 spec:
-  # Mirrors `docker compose up --scale web=5` from the practical
-  replicas: 5
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels: {app: friendlyhello}
   template:
@@ -15,41 +13,37 @@ spec:
     spec:
       containers:
         - name: web
-          # Image built locally and pushed to Docker Hub (see apps/friendlyhello/build.sh)
-          image: pixelotes/friendlyhello:latest
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 80
           envFrom:
             - configMapRef:
                 name: friendlyhello-config
-          resources:
-            requests: {cpu: 50m, memory: 64Mi}
-            limits:   {memory: 256Mi}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: friendlyhello
-  namespace: friendlyhello
 spec:
   selector: {app: friendlyhello}
   ports:
     - name: http
       port: 80
       targetPort: 80
+{{- if .Values.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: friendlyhello
-  namespace: friendlyhello
   annotations:
-    # Traefik handles round-robin across the 5 pods automatically via the Service endpoints
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  ingressClassName: traefik
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: friendlyhello.localhost
+    - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
           - path: /
@@ -59,3 +53,4 @@ spec:
                 name: friendlyhello
                 port:
                   number: 80
+{{- end }}

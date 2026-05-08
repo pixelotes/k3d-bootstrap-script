@@ -1,0 +1,25 @@
+replicaCount: 5
+
+image:
+  repository: pixelotes/friendlyhello
+  tag: latest
+  pullPolicy: Always
+
+env:
+  NAME: "K3s Lab"
+  REDIS_HOST: "redis"
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits:   {memory: 256Mi}
+
+ingress:
+  enabled: true
+  className: traefik
+  host: friendlyhello.localhost
+
+redis:
+  image: redis:7-alpine
+  resources:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits:   {memory: 128Mi}
