@@ -21,12 +21,10 @@ ports:
   - port: 30090:30090
     nodeFilters: [loadbalancer]
 options:
-  k3s:
-    extraArgs:
-      # Disable servicelb (we don't need klipper-lb here, k3d brings its own LB)
-      - arg: --disable=servicelb
-        nodeFilters: [server:*]
-      # Keep Traefik (we want it as ingress per RA5_2)
+  # We keep both klipper-lb (servicelb) and Traefik enabled.
+  # klipper-lb assigns EXTERNAL-IPs to LoadBalancer services so Traefik
+  # populates Ingress.status.loadBalancer (otherwise ArgoCD apps with an
+  # Ingress stay 'Progressing' forever).
   kubeconfig:
     updateDefaultKubeconfig: true
     switchCurrentContext: true

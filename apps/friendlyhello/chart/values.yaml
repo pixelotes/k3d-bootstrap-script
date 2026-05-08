@@ -1,3 +1,4 @@
+---
 replicaCount: 5
 
 image:
@@ -10,8 +11,11 @@ env:
   REDIS_HOST: "redis"
 
 resources:
-  requests: {cpu: 50m, memory: 64Mi}
-  limits:   {memory: 256Mi}
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
 
 ingress:
   enabled: true
@@ -21,5 +25,19 @@ ingress:
 redis:
   image: redis:7-alpine
   resources:
-    requests: {cpu: 25m, memory: 32Mi}
-    limits:   {memory: 128Mi}
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# Vault Agent injection. Set vault.enabled=true *after* running scripts/vault-setup.sh.
+# When enabled:
+#   - A ServiceAccount 'friendlyhello' is created and bound to the Vault role
+#   - The pod gets vault.hashicorp.com/* annotations so the injector adds a sidecar
+#   - The container command sources /vault/secrets/api-token to populate API_TOKEN
+vault:
+  enabled: false
+  role: friendlyhello
+  secretPath: secret/data/friendlyhello
+  secretKey: api_token

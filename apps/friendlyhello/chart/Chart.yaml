@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: friendlyhello
 description: Flask + Redis demo app from the RA5_2 practical (Docker -> K8s)
