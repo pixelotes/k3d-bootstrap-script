@@ -1,0 +1,70 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: open-webui
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: open-webui
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://helm.openwebui.com/
+    chart: open-webui
+    targetRevision: 14.2.0
+    helm:
+      values: |
+        # Use the existing Ollama Helm release (in the 'ollama' namespace) as the backend.
+        # Disable the Ollama subchart that Open WebUI bundles by default.
+        ollama:
+          enabled: false
+        ollamaUrls:
+          - http://ollama.ollama.svc.cluster.local:11434
+        # Disable bundled Pipelines to keep the footprint small for the lab.
+        pipelines:
+          enabled: false
+        # Persistence for /app/backend/data (chat history, configs, RAG store)
+        persistence:
+          enabled: true
+          storageClass: local-path
+          size: 2Gi
+        # Service + Traefik Ingress
+        service:
+          type: ClusterIP
+          port: 80
+        ingress:
+          enabled: true
+          class: traefik
+          host: openwebui.localhost
+        # Lab-only resource hints
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager
+    - group: apps
+      kind: StatefulSet
+      managedFieldsManagers:
+        - kube-controller-manager

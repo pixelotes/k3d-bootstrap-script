@@ -1,0 +1,73 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ollama
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  destination:
+    namespace: ollama
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://otwld.github.io/ollama-helm/
+    chart: ollama
+    targetRevision: 1.56.0
+    helm:
+      values: |
+        replicaCount: 1
+        ollama:
+          # Pre-pull (blocking init container) and pre-load the small Qwen3 model on startup
+          models:
+            pull:
+              - qwen3:0.6b
+            run:
+              - qwen3:0.6b
+          gpu:
+            enabled: false   # OrbStack/k3d on macOS = CPU only
+        persistentVolume:
+          enabled: true
+          storageClass: local-path
+          size: 5Gi
+        service:
+          type: ClusterIP
+          port: 11434
+        ingress:
+          enabled: true
+          className: traefik
+          hosts:
+            - host: ollama.localhost
+              paths:
+                - path: /
+                  pathType: Prefix
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 2Gi
+        # Give the init container time to pull the model on slow connections
+        readinessProbe:
+          initialDelaySeconds: 30
+        livenessProbe:
+          initialDelaySeconds: 60
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager
