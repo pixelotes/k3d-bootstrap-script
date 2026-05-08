@@ -89,8 +89,22 @@ echo "= 2) UNSEAL                   ="
 echo "==============================="
 
 for pod in vault-0 vault-1 vault-2; do
-  POD_STATUS=$(kubectl -n "${VAULT_NS}" exec "${pod}" -- vault status -format=json 2>/dev/null || true)
-  [[ -z "${POD_STATUS}" ]] && POD_STATUS='{}'
+  # Followers need time to join the Raft leader before they know they're "initialized".
+  # Poll until vault status reports initialized=true (cap at 90s).
+  pod_deadline=$(( $(date +%s) + 90 ))
+  while :; do
+    POD_STATUS=$(kubectl -n "${VAULT_NS}" exec "${pod}" -- vault status -format=json 2>/dev/null || true)
+    [[ -z "${POD_STATUS}" ]] && POD_STATUS='{}'
+    INITIALIZED=$(echo "${POD_STATUS}" | jq -r '.initialized // false')
+    if [[ "${INITIALIZED}" == "true" ]]; then break; fi
+    if (( $(date +%s) > pod_deadline )); then
+      echo "  ${pod}: timed out waiting for initialized=true (still joining Raft?)" >&2
+      exit 1
+    fi
+    echo "  ${pod}: not yet initialized, waiting for Raft join..."
+    sleep 3
+  done
+
   SEALED=$(echo "${POD_STATUS}" | jq -r '.sealed // true')
   if [[ "${SEALED}" == "false" ]]; then
     echo "  ${pod}: already unsealed"
