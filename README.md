@@ -37,8 +37,10 @@ brew install vault etcd stern
 ```
 .
 ├── start-cluster.sh        Phase 1: create k3d cluster + install ArgoCD
-├── deploy.sh               Phase 2: deploy ArgoCD apps one at a time
+├── deploy.sh               Phase 2: deploy ArgoCD apps one at a time (with wait)
 ├── stop-cluster.sh         Tear down
+├── scripts/
+│   └── vault-setup.sh      Init + unseal + configure Vault for the friendlyhello demo
 ├── config/
 │   └── k3d-config.yaml     2 servers + 2 agents, host port mappings
 ├── argocd/                 One ArgoCD Application per file (file name == app name)
@@ -92,32 +94,32 @@ You can pass several at once if you trust they'll come up clean:
 ./deploy.sh cert-manager kube-prometheus-stack
 ```
 
-### Phase 3 — Vault initialization (one-time)
+### Phase 3 — Vault setup (one-time)
 
-Vault HA with Raft starts **sealed**. Initialize it once on `vault-0`, save the unseal keys + root token, and unseal all 3 pods:
+Vault HA with Raft starts **sealed**. The `scripts/vault-setup.sh` script is idempotent and does everything: init → unseal → enable KV v2 → enable Kubernetes auth → policy + role for friendlyhello → write the demo secret.
 
 ```bash
-# Init (writes 5 unseal keys + root token to ~/vault-init.json — keep it safe!)
-kubectl -n vault exec vault-0 -- vault operator init \
-  -key-shares=5 -key-threshold=3 -format=json > ~/vault-init.json
+./scripts/vault-setup.sh
+```
 
-# Unseal vault-0 (pass any 3 of the 5 keys)
-for i in 0 1 2; do
-  kubectl -n vault exec vault-0 -- vault operator unseal \
-    "$(jq -r ".unseal_keys_b64[$i]" ~/vault-init.json)"
-done
+It saves the unseal keys + root token to `~/k3s-lab-vault-init.json` (gitignored — **keep it safe**, without it Vault is bricked).
 
-# Join + unseal the other two replicas
-for pod in vault-1 vault-2; do
-  for i in 0 1 2; do
-    kubectl -n vault exec "${pod}" -- vault operator unseal \
-      "$(jq -r ".unseal_keys_b64[$i]" ~/vault-init.json)"
-  done
-done
+After the script finishes, friendlyhello's Vault demo is one toggle away:
 
-# Verify Raft cluster
-kubectl -n vault exec vault-0 -- sh -c \
-  "VAULT_TOKEN=$(jq -r .root_token ~/vault-init.json) vault operator raft list-peers"
+```bash
+# Enable Vault Agent injection in the chart
+sed -i '' 's/^  enabled: false$/  enabled: true/' apps/friendlyhello/chart/values.yaml
+git add apps/friendlyhello/chart/values.yaml
+git commit -m "Enable Vault injection for friendlyhello"
+git push
+```
+
+ArgoCD detects the change and re-renders friendlyhello with the Vault Agent annotations. New pods come up with a `vault-agent-init` initContainer + `vault-agent` sidecar. Verify:
+
+```bash
+kubectl -n friendlyhello get pods                                       # 2/2 containers per pod
+kubectl -n friendlyhello logs deploy/friendlyhello -c web | grep API_TOKEN
+# -> API_TOKEN from Vault: s3cr3t-f...
 ```
 
 ### Phase 4 — Headlamp access

@@ -12,9 +12,10 @@ CLUSTER_NAME="k3s-lab"
 # Order matters: each app must be Synced+Healthy before the next one starts.
 apps=(
   "headlamp"
-  # "cert-manager"
-  # "kube-prometheus-stack"
+  "cert-manager"
+  "kube-prometheus-stack"
   # "vault"
+  "friendlyhello"
 )
 
 # 0) Pre-flight checks
@@ -83,9 +84,21 @@ echo "URL:      http://localhost:30080"
 echo "User:     admin"
 echo "Password: ${ARGOCD_PASS}"
 
-# 3) Deploy ArgoCD apps (one at a time, waiting for each — see deploy.sh)
+# 3) Hand off ArgoCD Application manifests — fire-and-forget, ArgoCD handles ordering & retries
 if [[ ${#apps[@]} -gt 0 ]]; then
-  "${SCRIPT_DIR}/deploy.sh" "${apps[@]}"
+  echo ""
+  echo "==============================="
+  echo "= APPLYING ARGOCD APPLICATIONS ="
+  echo "==============================="
+  for app in "${apps[@]}"; do
+    file="${SCRIPT_DIR}/argocd/${app}.yaml"
+    if [[ ! -f "${file}" ]]; then
+      echo "  - ${app}: SKIP (no file at ${file})"
+      continue
+    fi
+    echo "  - ${app}"
+    kubectl apply -f "${file}" >/dev/null
+  done
 fi
 
 cat <<EOF
@@ -96,8 +109,10 @@ cat <<EOF
 Context:    k3d-${CLUSTER_NAME}
 ArgoCD UI:  http://localhost:30080  (admin / ${ARGOCD_PASS})
 
-To deploy more apps later, e.g.:
+The Applications are queued in ArgoCD. Watch them roll out with:
+  kubectl -n argocd get applications -w
+
+Or use deploy.sh when you want to deploy + WAIT for an app to become Healthy:
   ./deploy.sh cert-manager
-  ./deploy.sh kube-prometheus-stack
   ./deploy.sh vault
 EOF

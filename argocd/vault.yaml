@@ -78,3 +78,18 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
+---
+# Vault server's SA needs auth-delegator to call TokenReview during k8s auth.
+# The Helm chart doesn't create this binding by default.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: vault
