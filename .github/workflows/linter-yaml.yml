@@ -1,0 +1,22 @@
+---
+name: YAML Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  yaml-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: '.'
+          config_file: '.yamllint'
+          format: 'parsable'
+          strict: true

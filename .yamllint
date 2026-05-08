@@ -3,7 +3,16 @@
 extends: default
 
 ignore: |
-  argocd.yaml
+  apps/argocd/argocd.yaml
+  apps/friendlyhello/chart/templates/
   .github/
   *.sh
   *.md
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  comments-indentation: disable
+  truthy:
+    check-keys: false
