@@ -23,7 +23,7 @@ apps=(
 
 # 0) Pre-flight checks
 required=(docker kubectl k3d)
-[[ " ${apps[*]} " == *" vault "* ]] && required+=(jq)   # vault-setup.sh needs jq
+[[ " ${apps[*]:-} " == *" vault "* ]] && required+=(jq)   # vault-setup.sh needs jq
 for bin in "${required[@]}"; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     echo "Missing required binary: $bin" >&2
