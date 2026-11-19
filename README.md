@@ -28,9 +28,14 @@ You still need:
 # k3d + lab tooling
 brew install k3d k9s
 
+# jq is needed by scripts/vault-setup.sh
+brew install jq
+
 # Optional but mentioned in the practical
 brew install vault etcd stern
 ```
+
+Tested with k3d v5.9.0, K3s v1.37.2 and Argo CD v3.6.2.
 
 ## Layout
 
@@ -68,7 +73,10 @@ When this finishes you have:
 
 - Cluster `k3s-lab` (context `k3d-k3s-lab`), 2 servers + 2 agents
 - ArgoCD reachable at <http://localhost:30080> (user `admin`, password printed by the script)
-- Whatever you put in the `apps=(...)` array at the top of `start-cluster.sh`, deployed one at a time and waited for `Healthy` before the next one. Default: just `headlamp`.
+- Whatever you put in the `apps=(...)` array at the top of `start-cluster.sh`, handed to ArgoCD in one go (ArgoCD retries until they settle). Default: `headlamp`, `cert-manager`, `kube-prometheus-stack`, `vault` and `friendlyhello`.
+- If `vault` is in the array, `scripts/vault-setup.sh` runs at the end (Phase 3 below), so Vault comes up initialised and unsealed.
+
+On a laptop with less memory, empty the array and use Phase 2 to bring apps up one by one.
 
 Sanity check:
 
@@ -80,13 +88,15 @@ kubectl -n argocd get applications
 
 ### Phase 2 — more platform apps, one at a time
 
-Same logic, on demand. Each call applies the ArgoCD Application and **waits until it's `Synced + Healthy`** before returning. If something stalls, you'll see it instead of having a half-deployed cluster.
+Each call applies the ArgoCD Application and **waits until it's `Healthy`** before returning (an `OutOfSync` status caused by chart defaults is reported but tolerated). If something stalls, you'll see it instead of having a half-deployed cluster.
 
 ```bash
 ./deploy.sh cert-manager
 ./deploy.sh kube-prometheus-stack
-./deploy.sh vault
+./deploy.sh vault            # stays Progressing until you run Phase 3
 ```
+
+Running `./deploy.sh` with no arguments lists every app in `argocd/`, including the optional extras (`ollama`, `open-webui`, `aidungeon-ollama`).
 
 You can pass several at once if you trust they'll come up clean:
 
@@ -104,7 +114,7 @@ Vault HA with Raft starts **sealed**. The `scripts/vault-setup.sh` script is ide
 
 It saves the unseal keys + root token to `~/k3s-lab-vault-init.json` (gitignored — **keep it safe**, without it Vault is bricked).
 
-After the script finishes, friendlyhello's Vault demo is one toggle away:
+After the script finishes, friendlyhello's Vault demo is one toggle away. ArgoCD reads the chart from `repoURL` in `argocd/friendlyhello.yaml`, which points at this repository, so **fork it first and change `repoURL` to your fork** or your commit will never reach the cluster.
 
 ```bash
 # Enable Vault Agent injection in the chart
@@ -124,7 +134,7 @@ kubectl -n friendlyhello logs deploy/friendlyhello -c web | grep API_TOKEN
 
 ### Phase 4 — Headlamp access
 
-The admin SA, ClusterRoleBinding, and token Secret are bundled into `argocd/headlamp.yaml`, so they're created when you ran `./deploy.sh headlamp`. Just grab the token:
+The admin SA, ClusterRoleBinding, and token Secret are bundled into `argocd/headlamp.yaml`. An initContainer writes a kubeconfig with that token, so Headlamp at <http://localhost:30090> logs in by itself. If it ever asks for a token, grab it with:
 
 ```bash
 kubectl -n headlamp get secret headlamp-admin-token \
@@ -133,8 +143,6 @@ kubectl -n headlamp get secret headlamp-admin-token \
 # Open Headlamp
 open http://localhost:30090
 ```
-
-Paste the token in the login form.
 
 ### Phase 5 — friendlyhello demo (Docker → K8s)
 
@@ -208,7 +216,7 @@ docker exec k3d-k3s-lab-server-0 ls /var/lib/rancher/k3s/server/db/snapshots
 | Per-app `argocd/<name>.yaml` model | Apps array → explicit args to `deploy.sh` (deploy one at a time) |
 | `apps/argocd/argocd.yaml` install | New apps: `vault` (HA Raft), `kube-prometheus-stack`, `headlamp`  |
 | `kubernetes-dashboard` Application | Replaced with `headlamp` (project archived in 2025)               |
-| `cert-manager` Application        | Bumped to v1.15.3                                                 |
+| `cert-manager` Application        | Same chart, `crds.enabled` instead of the deprecated `installCRDs` |
 | `stop-cluster.sh`                 | `kind delete` → `k3d cluster delete`                              |
 
 Removed (not in RA5_2): `nginx-ingress` (K3s already ships Traefik), `falco`, `kyverno`, `victoria*`, `external-secrets-operator`.

@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://helm.openwebui.com/
     chart: open-webui
-    targetRevision: 14.2.0
+    targetRevision: 18.4.0
     helm:
       values: |
         # Use the existing Ollama Helm release (in the 'ollama' namespace) as the backend.

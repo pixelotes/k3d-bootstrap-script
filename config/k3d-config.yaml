@@ -3,9 +3,11 @@ apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: k3s-lab
+# 2 servers to practise a multi-server control plane. etcd needs a majority,
+# so this is not HA (losing either server stops etcd). Use 3 for real HA.
 servers: 2
 agents: 2
-image: rancher/k3s:v1.30.5-k3s1
+image: rancher/k3s:v1.37.2-k3s1
 network: k3d-k3s-lab
 ports:
   # Traefik HTTP -> host 8080
@@ -17,7 +19,7 @@ ports:
   # ArgoCD UI via NodePort -> host 30080
   - port: 30080:30080
     nodeFilters: [loadbalancer]
-  # Kubernetes-dashboard via NodePort -> host 30090
+  # Headlamp via NodePort -> host 30090
   - port: 30090:30090
     nodeFilters: [loadbalancer]
 options:

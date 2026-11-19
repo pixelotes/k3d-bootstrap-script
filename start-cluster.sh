@@ -8,8 +8,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLUSTER_NAME="k3s-lab"
 
-# === Apps to deploy after ArgoCD is up (file name in argocd/<name>.yaml) ===
-# Order matters: each app must be Synced+Healthy before the next one starts.
+# === Apps to hand to ArgoCD once it is up (file name in argocd/<name>.yaml) ===
+# They are applied in one go and ArgoCD retries until they settle. Vault stays
+# unhealthy until it is unsealed, so it can't be waited on here; if "vault" is
+# in the list, scripts/vault-setup.sh runs at the end. To deploy and wait one
+# app at a time instead, empty this array and use ./deploy.sh <app>.
 apps=(
   "headlamp"
   "cert-manager"
@@ -19,7 +22,9 @@ apps=(
 )
 
 # 0) Pre-flight checks
-for bin in docker kubectl k3d; do
+required=(docker kubectl k3d)
+[[ " ${apps[*]} " == *" vault "* ]] && required+=(jq)   # vault-setup.sh needs jq
+for bin in "${required[@]}"; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     echo "Missing required binary: $bin" >&2
     exit 1
@@ -48,7 +53,8 @@ echo "= ARGOCD ="
 echo "=========="
 
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argocd -f "${SCRIPT_DIR}/apps/argocd/argocd.yaml"
+# Server-side apply: the ArgoCD CRDs are too big for client-side apply
+kubectl apply -n argocd --server-side --force-conflicts -f "${SCRIPT_DIR}/apps/argocd/argocd.yaml"
 
 components=(
   "argocd-server"

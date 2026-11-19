@@ -20,7 +20,7 @@ spec:
   source:
     repoURL: https://kubernetes-sigs.github.io/headlamp/
     chart: headlamp
-    targetRevision: 0.42.0
+    targetRevision: 0.46.0
     helm:
       values: |
         # Single pod, web UI for Kubernetes — recommended replacement for
@@ -47,7 +47,7 @@ spec:
         # boots authenticated. Avoids the "paste your token" antipattern.
         initContainers:
           - name: kubeconfig-init
-            image: busybox:1.36
+            image: busybox:1.37
             command: ["/bin/sh", "-c"]
             args:
               - |

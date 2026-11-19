@@ -7,18 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPS_DIR="${SCRIPT_DIR}/argocd"
 
-# Catalog of available apps (file name == app name == ArgoCD Application metadata.name)
-available_apps=(
-  "cert-manager"
-  "kube-prometheus-stack"
-  "vault"
-  "headlamp"
-  "friendlyhello"
-  "ollama"
-  "open-webui"
-  "aidungeon-ollama"
-  "aiventure"
-)
+# Catalog of available apps, built from argocd/*.yaml
+# (file name == app name == ArgoCD Application metadata.name)
+available_apps=()
+for f in "${APPS_DIR}"/*.yaml; do
+  available_apps+=("$(basename "${f}" .yaml)")
+done
 
 usage() {
   cat <<EOF
